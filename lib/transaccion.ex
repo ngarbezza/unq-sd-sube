@@ -1,3 +1,5 @@
 defmodule Transaccion do
-  defstruct idTarjeta: nil, monto: nil
+  @moduledoc false
+
+  defstruct tarjeta_id: nil, monto: nil
 end

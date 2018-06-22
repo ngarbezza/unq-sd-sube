@@ -1,23 +1,25 @@
 defmodule Tarjeta do
+  @moduledoc false
+
   defstruct id: nil, saldo: 0
 
-  def nuevaTarjeta(id) do
-    %Tarjeta{ id: id }
+  def nueva_tarjeta(id) do
+    %Tarjeta{id: id}
   end
 
   def cargar(tarjeta, dinero) do
-    put_in tarjeta.saldo, tarjeta.saldo + dinero
+    put_in(tarjeta.saldo, tarjeta.saldo + dinero)
   end
 
   def descontar(tarjeta, dinero) do
     if puede_descontar(tarjeta, dinero) do
       {:ok, put_in(tarjeta.saldo, tarjeta.saldo - dinero)}
     else
-      errorDeSaldoInsuficiente()
+      error_de_saldo_insuficiente()
     end
   end
 
-  def errorDeSaldoInsuficiente, do: {:error, "Saldo insuficiente"}
+  def error_de_saldo_insuficiente, do: {:error, "Saldo insuficiente"}
 
   defp puede_descontar(tarjeta, dinero) do
     saldo_minimo_permitido = -20
