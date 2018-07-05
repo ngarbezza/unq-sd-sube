@@ -1,6 +1,7 @@
 defmodule Tarjeta do
   @moduledoc false
 
+  @enforce_keys [:id]
   defstruct id: nil, saldo: 0
 
   def nueva_tarjeta(id) do

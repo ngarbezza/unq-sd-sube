@@ -1,9 +1,11 @@
 defmodule Expendedor do
   @moduledoc false
 
-  import Tarjeta
-  import Transaccion
+  require EventLogger
 
+  import Tarjeta
+
+  @enforce_keys [:nombre]
   defstruct transacciones: [], nombre: nil
 
   def nuevo_expendedor(nombre) do
@@ -12,26 +14,34 @@ defmodule Expendedor do
 
   def cobrar_pasaje(expendedor, tarjeta, monto) do
     case descontar(tarjeta, monto) do
-      {:ok, tarjeta} -> transaccion_exitosa(expendedor, tarjeta, monto)
-      _ -> expendedor
+      {:ok, tarjeta} -> {:ok, transaccion_exitosa(expendedor, tarjeta, monto)}
+      _ -> {:error, expendedor}
+    end
+  end
+
+  def loop(expendedor) do
+    receive do
+      {:cobrar, usuario, tarjeta, monto} ->
+        expendedor |> log_event("Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
+
+        case cobrar_pasaje(expendedor, tarjeta, monto) do
+          {:ok, expendedor} ->
+            usuario |> send({:descontar, monto})
+            loop(expendedor)
+
+          _ ->
+            loop(expendedor)
+        end
     end
   end
 
   defp transaccion_exitosa(expendedor, tarjeta, monto) do
     nueva_transaccion = %Transaccion{tarjeta_id: tarjeta.id, monto: monto}
-    transacciones = expendedor.transacciones ++ [nueva_transaccion]
+    transacciones = [nueva_transaccion | expendedor.transacciones]
     put_in(expendedor.transacciones, transacciones)
   end
 
-  def loop do
-    receive do
-      {:cobrar, usuario, tarjeta, monto} ->
-        IO.puts("cobrar en tarjeta ##{tarjeta.id} #{monto} pesos")
-        {:ok, tarjeta} = descontar(tarjeta, monto)
-        send(usuario, {:descontar, monto, tarjeta})
-        loop()
-    end
-
-    loop()
+  defp log_event(expendedor, event_string) do
+    EventLogger.event("EXPENDEDOR", expendedor.nombre, event_string)
   end
 end
