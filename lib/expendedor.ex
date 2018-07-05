@@ -22,14 +22,14 @@ defmodule Expendedor do
   def loop(expendedor) do
     receive do
       {:cobrar, usuario, tarjeta, monto} ->
-        expendedor |> log_event("Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
-
         case cobrar_pasaje(expendedor, tarjeta, monto) do
           {:ok, expendedor} ->
+            expendedor |> log_event("Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
             usuario |> send({:descontar, monto})
             loop(expendedor)
 
-          _ ->
+          {:error, expendedor} ->
+            expendedor |> log_event("No puede cobrar #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo insuficiente")
             loop(expendedor)
         end
     end
