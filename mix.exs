@@ -21,7 +21,9 @@ defmodule Sube.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:credo, "~> 0.8.8", only: [:dev], runtime: false}
+      {:credo, "~> 0.8.8", only: :dev, runtime: false},
+      {:uuid, "~> 1.1"},
+      {:ex_matchers, "~> 0.1.3", only: :test}
     ]
   end
 end
