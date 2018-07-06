@@ -4,9 +4,10 @@ defmodule Expendedor do
   require EventLogger
 
   import Tarjeta
+  import CoreExtensions
 
   @enforce_keys [:nombre]
-  defstruct transacciones: [], nombre: nil
+  defstruct nombre: nil, transacciones: [], servidores: []
 
   def nuevo_expendedor(nombre) do
     %Expendedor{nombre: nombre}
@@ -20,18 +21,31 @@ defmodule Expendedor do
   end
 
   def loop(expendedor) do
+    if_empty(expendedor.servidores) do
+      expendedor |> log_event("Sin servidores de sincronización!!")
+    end
+
     receive do
       {:cobrar, usuario, tarjeta, monto} ->
         case cobrar_pasaje(expendedor, tarjeta, monto) do
           {:ok, expendedor} ->
-            expendedor |> log_event("Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
             usuario |> send({:descontar, monto})
-            loop(expendedor)
+
+            expendedor
+            |> log_event("Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
+            |> loop
 
           {:error, expendedor} ->
-            expendedor |> log_event("No puede cobrar #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo insuficiente")
-            loop(expendedor)
+            expendedor
+            |> log_event("No puede cobrar #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo insuficiente")
+            |> loop
         end
+
+      {:servidor, servidor} ->
+        expendedor.servidores
+        |> put_in(expendedor.servidores ++ [servidor])
+        |> log_event("Registrado servidor de sincronización #{inspect(servidor)}")
+        |> loop
     end
   end
 
@@ -43,5 +57,6 @@ defmodule Expendedor do
 
   defp log_event(expendedor, event_string) do
     EventLogger.event("EXPENDEDOR", expendedor.nombre, event_string)
+    expendedor
   end
 end

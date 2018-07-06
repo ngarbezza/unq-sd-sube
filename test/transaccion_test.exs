@@ -2,7 +2,7 @@ defmodule TransaccionTest do
   use ExUnit.Case, async: true
 
   import Transaccion
-  import Extensions
+  import CoreExtensions
 
   test "crea una transaccion con un id" do
     transaccion = nueva_transaccion(1, 10)
