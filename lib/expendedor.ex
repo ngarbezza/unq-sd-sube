@@ -43,9 +43,13 @@ defmodule Expendedor do
 
       {:servidor, servidor} ->
         expendedor.servidores
-        |> put_in(expendedor.servidores ++ [servidor])
-        |> log_event("Registrado servidor de sincronización #{inspect(servidor)}")
+        |> put_in([servidor | expendedor.servidores])
+        |> log_event("Registrado servidor de sincronización #{servidor.nombre}")
         |> loop
+
+      {:status} ->
+        expendedor
+        |> log_event("Status: #{length(expendedor.servidores)} servidor(es), #{length(expendedor.transacciones)} transaccion(es) pendiente(s)")
     end
   end
 
