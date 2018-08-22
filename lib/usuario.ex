@@ -1,17 +1,12 @@
 defmodule Usuario do
   @moduledoc false
 
-  require EventLogger
-  require Expendedor
-
   import Tarjeta
 
   @enforce_keys [:nombre, :tarjeta]
   defstruct [:nombre, :tarjeta]
 
-  def nuevo_usuario(nombre, tarjeta) do
-    %Usuario{nombre: nombre, tarjeta: tarjeta}
-  end
+  def nuevo_usuario(nombre, tarjeta), do: %Usuario{nombre: nombre, tarjeta: tarjeta}
 
   def loop(usuario) do
     receive do
@@ -53,7 +48,7 @@ defmodule Usuario do
   end
 
   defp log_event(usuario, event_string) do
-    EventLogger.event("USUARIO", usuario.nombre, event_string)
+    EventLogger.event("USUARIO", usuario.nombre, event_string, "\t\t\t")
     usuario
   end
 end

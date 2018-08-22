@@ -1,10 +1,8 @@
 defmodule Examples do
   @moduledoc false
 
-  require Expendedor
   import Usuario
   import Tarjeta
-  import Servidor
 
   # caso feliz, sin servidores
   def one do
@@ -15,11 +13,11 @@ defmodule Examples do
     pepa |> send({:cargar, 50})
     pepe |> send({:cargar, 20})
     pepe |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
     pepe |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
     pepe |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
     pepa |> send({:viajar, l159, 20})
 
     Expendedor.status(l159)
@@ -33,16 +31,16 @@ defmodule Examples do
 
     # puede viajar
     pepa |> send({:viajar, l159, 15})
-    Process.sleep(1000)
+    pause()
     # no puede
     pepa |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
     # puede, porque llega hasta el limite
     pepa |> send({:viajar, l159, 5})
-    Process.sleep(1000)
+    pause()
     # no puede
     pepa |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
 
     Expendedor.status(l159)
     [l159, pepa]
@@ -51,19 +49,24 @@ defmodule Examples do
   # caso feliz, con servidores
   def three do
     {:ok, l159} = Expendedor.iniciar("159 interno 8")
-    serv = Servidor |> spawn(:loop, [nuevo_servidor("Uno")])
+    {:ok, serv} = Servidor.iniciar("Uno")
     pepe = Usuario |> spawn(:loop, [nuevo_usuario("Pepe", nueva_tarjeta(2))])
 
     Expendedor.registrar_servidor(l159, serv)
     pepe |> send({:cargar, 20})
     pepe |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
     pepe |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
     pepe |> send({:viajar, l159, 10})
-    Process.sleep(1000)
+    pause()
 
+    Expendedor.status(l159)
+    Expendedor.sincronizar(l159)
+    pause()
     Expendedor.status(l159)
     [l159, serv, pepe]
   end
+
+  defp pause(msec \\ 1000), do: Process.sleep(msec)
 end

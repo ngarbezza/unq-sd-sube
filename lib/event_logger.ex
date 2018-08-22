@@ -1,7 +1,7 @@
 defmodule EventLogger do
   @moduledoc false
 
-  def event(source, identifier, event_string) do
-    IO.puts("#{source}\t\t#{identifier}\t\t#{event_string}")
+  def event(source, identifier, event_string, separator \\ "\t\t") do
+    IO.puts("#{source}#{separator}#{identifier}#{separator}#{event_string}")
   end
 end
