@@ -9,8 +9,66 @@ defmodule Expendedor do
   @enforce_keys [:nombre]
   defstruct nombre: nil, transacciones: [], servidores: []
 
+  ## GenServer initialization
+
+  use GenServer
+
+  def iniciar(nombre) do
+    GenServer.start_link(__MODULE__, nuevo_expendedor(nombre))
+  end
+
   def nuevo_expendedor(nombre) do
     %Expendedor{nombre: nombre}
+  end
+
+  # Client API
+
+  def cobrar(pid, usuario, tarjeta, monto) do
+    GenServer.cast(pid, {:cobrar, usuario, tarjeta, monto})
+  end
+
+  def registrar_servidor(pid, servidor) do
+    GenServer.cast(pid, {:registrar, servidor})
+  end
+
+  def status(pid) do
+    GenServer.call(pid, {:status})
+  end
+
+  # Server (callbacks)
+
+  @impl true
+  def init(expendedor) do
+    {:ok, expendedor}
+  end
+
+  @impl true
+  def handle_cast({:cobrar, usuario, tarjeta, monto}, expendedor) do
+    chequear_estado_de_servidores(expendedor)
+    case cobrar_pasaje(expendedor, tarjeta, monto) do
+      {:ok, expendedor} ->
+        send(usuario, {:descontar, monto})
+        log_event(expendedor, "Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
+        {:noreply, expendedor}
+
+      {:error, expendedor} ->
+        log_event(expendedor, "No puede cobrar #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo insuficiente")
+        {:noreply, expendedor}
+    end
+  end
+
+  @impl true
+  def handle_cast({:registrar, servidor}, expendedor) do
+    expendedor = put_in(expendedor.servidores, [servidor | expendedor.servidores])
+    log_event(expendedor, "Registrado servidor de sincronización #{inspect(servidor)}")
+    {:noreply, expendedor}
+  end
+
+  @impl true
+  def handle_call({:status}, _from, expendedor) do
+    message = "Status: #{length(expendedor.servidores)} servidor(es), #{length(expendedor.transacciones)} transaccion(es) pendiente(s)"
+    log_event(expendedor, message)
+    {:reply, message, expendedor}
   end
 
   def cobrar_pasaje(expendedor, tarjeta, monto) do
@@ -20,37 +78,8 @@ defmodule Expendedor do
     end
   end
 
-  def loop(expendedor) do
-    if_empty(expendedor.servidores) do
-      expendedor |> log_event("Sin servidores de sincronización!!")
-    end
-
-    receive do
-      {:cobrar, usuario, tarjeta, monto} ->
-        case cobrar_pasaje(expendedor, tarjeta, monto) do
-          {:ok, expendedor} ->
-            usuario |> send({:descontar, monto})
-
-            expendedor
-            |> log_event("Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
-            |> loop
-
-          {:error, expendedor} ->
-            expendedor
-            |> log_event("No puede cobrar #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo insuficiente")
-            |> loop
-        end
-
-      {:servidor, servidor} ->
-        expendedor.servidores
-        |> put_in([servidor | expendedor.servidores])
-        |> log_event("Registrado servidor de sincronización #{servidor.nombre}")
-        |> loop
-
-      {:status} ->
-        expendedor
-        |> log_event("Status: #{length(expendedor.servidores)} servidor(es), #{length(expendedor.transacciones)} transaccion(es) pendiente(s)")
-    end
+  defp chequear_estado_de_servidores(expendedor) do
+    if_empty(expendedor.servidores, do: log_event(expendedor, "Sin servidores de sincronización!!"))
   end
 
   defp transaccion_exitosa(expendedor, tarjeta, monto) do
@@ -61,6 +90,5 @@ defmodule Expendedor do
 
   defp log_event(expendedor, event_string) do
     EventLogger.event("EXPENDEDOR", expendedor.nombre, event_string)
-    expendedor
   end
 end

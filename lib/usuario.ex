@@ -2,6 +2,7 @@ defmodule Usuario do
   @moduledoc false
 
   require EventLogger
+  require Expendedor
 
   import Tarjeta
 
@@ -30,7 +31,7 @@ defmodule Usuario do
   end
 
   defp solicitar_viaje_y_continuar(usuario, expendedor, monto) do
-    expendedor |> send({:cobrar, self(), usuario.tarjeta, monto})
+    Expendedor.cobrar(expendedor, self(), usuario.tarjeta, monto)
 
     usuario
     |> log_event("Solicita viaje por #{monto} pesos")
