@@ -47,7 +47,7 @@ defmodule Expendedor do
     chequear_estado_de_servidores(expendedor)
     case cobrar_pasaje(expendedor, tarjeta, monto) do
       {:ok, expendedor} ->
-        send(usuario, {:descontar, monto})
+        Usuario.descontar(usuario, monto)
         log_event(expendedor, "Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
         {:noreply, expendedor}
 

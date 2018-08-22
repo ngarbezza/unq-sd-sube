@@ -1,50 +1,56 @@
 defmodule Usuario do
   @moduledoc false
 
-  import Tarjeta
-
   @enforce_keys [:nombre, :tarjeta]
   defstruct [:nombre, :tarjeta]
 
+  ## GenServer initialization
+
+  use GenServer
+
+  def iniciar(nombre, tarjeta) do
+    GenServer.start_link(__MODULE__, nuevo_usuario(nombre, tarjeta))
+  end
+
   def nuevo_usuario(nombre, tarjeta), do: %Usuario{nombre: nombre, tarjeta: tarjeta}
 
-  def loop(usuario) do
-    receive do
-      {:cargar, monto} -> cargar_tarjeta_y_continuar(usuario, monto)
-      {:viajar, expendedor, monto} -> solicitar_viaje_y_continuar(usuario, expendedor, monto)
-      {:descontar, monto} -> descontar_viaje_y_continuar(usuario, monto)
-      {:saldo} -> informar_saldo_y_continuar(usuario)
-    end
+  # Client API
+
+  def cargar(pid, monto), do: GenServer.cast(pid, {:cargar, monto})
+  def viajar(pid, expendedor, monto), do: GenServer.cast(pid, {:viajar, expendedor, monto})
+  def descontar(pid, monto), do: GenServer.cast(pid, {:descontar, monto})
+  def saldo(pid), do: GenServer.call(pid, {:saldo})
+
+  # Server (callbacks)
+
+  @impl true
+  def init(usuario), do: {:ok, usuario}
+
+  @impl true
+  def handle_cast({:cargar, monto}, usuario) do
+    tarjeta = Tarjeta.cargar(usuario.tarjeta, monto)
+    log_event(usuario, "Carga #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo nuevo #{tarjeta.saldo} pesos")
+    {:noreply, put_in(usuario.tarjeta, tarjeta)}
   end
 
-  defp cargar_tarjeta_y_continuar(usuario, monto) do
-    tarjeta = cargar(usuario.tarjeta, monto)
-
-    put_in(usuario.tarjeta, tarjeta)
-    |> log_event("Carga #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo nuevo #{tarjeta.saldo} pesos")
-    |> loop
-  end
-
-  defp solicitar_viaje_y_continuar(usuario, expendedor, monto) do
+  @impl true
+  def handle_cast({:viajar, expendedor, monto}, usuario) do
     Expendedor.cobrar(expendedor, self(), usuario.tarjeta, monto)
-
-    usuario
-    |> log_event("Solicita viaje por #{monto} pesos")
-    |> loop
+    log_event(usuario, "Solicita viaje por #{monto} pesos")
+    {:noreply, usuario}
   end
 
-  defp descontar_viaje_y_continuar(usuario, monto) do
-    {:ok, tarjeta} = descontar(usuario.tarjeta, monto)
-
-    put_in(usuario.tarjeta, tarjeta)
-    |> log_event("Cobrados #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo nuevo #{tarjeta.saldo} pesos")
-    |> loop
+  @impl true
+  def handle_cast({:descontar, monto}, usuario) do
+    {:ok, tarjeta} = Tarjeta.descontar(usuario.tarjeta, monto)
+    log_event(usuario, "Cobrados #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo nuevo #{tarjeta.saldo} pesos")
+    {:noreply, put_in(usuario.tarjeta, tarjeta)}
   end
 
-  defp informar_saldo_y_continuar(usuario) do
-    usuario
-    |> log_event("Saldo en tarjeta: #{usuario.tarjeta.saldo}")
-    |> loop
+  @impl true
+  def handle_call({:saldo}, _from, usuario) do
+    log_event(usuario, "Saldo en tarjeta: #{usuario.tarjeta.saldo} pesos")
+    {:reply, usuario.tarjeta.saldo, usuario}
   end
 
   defp log_event(usuario, event_string) do
