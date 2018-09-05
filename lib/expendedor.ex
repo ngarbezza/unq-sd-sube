@@ -7,12 +7,20 @@ defmodule Expendedor do
   @enforce_keys [:nombre]
   defstruct nombre: nil, transacciones: [], servidores: []
 
+  ## Supervisor
+
+  alias Expendedor.Cache
+
+  def iniciar(nombre) do
+    Expendedor.Supervisor.start_link(nuevo_expendedor(nombre))
+  end
+
   ## GenServer initialization
 
   use GenServer
 
-  def iniciar(nombre) do
-    GenServer.start_link(__MODULE__, nuevo_expendedor(nombre))
+  def start_link(cache_pid) do
+    GenServer.start_link(__MODULE__, cache_pid)
   end
 
   def nuevo_expendedor(nombre), do: %Expendedor{nombre: nombre}
@@ -37,53 +45,72 @@ defmodule Expendedor do
 
   def status(pid), do: GenServer.call(pid, {:status})
 
+  # para simular una excepción
+  def crash(pid), do: GenServer.cast(pid, {:crash})
+
   # Server (callbacks)
 
   @impl true
-  def init(expendedor), do: {:ok, expendedor}
+  def init(cache_pid) do
+    expendedor = Cache.expendedor_para(cache_pid)
+    {:ok, %{expendedor: expendedor, cache_pid: cache_pid}}
+  end
 
   @impl true
-  def handle_cast({:cobrar, usuario, tarjeta, monto}, expendedor) do
-    chequear_estado_de_servidores(expendedor)
-    case cobrar_pasaje(expendedor, tarjeta, monto) do
-      {:ok, expendedor} ->
+  def handle_cast({:cobrar, usuario, tarjeta, monto}, estado) do
+    chequear_estado_de_servidores(estado.expendedor)
+    case cobrar_pasaje(estado.expendedor, tarjeta, monto) do
+      {:ok, nuevo_expendedor} ->
         Usuario.descontar(usuario, monto)
-        log_event(expendedor, "Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
-        {:noreply, expendedor}
+        log_event(nuevo_expendedor, "Cobra en tarjeta ##{tarjeta.id} #{monto} pesos")
+        nuevo_estado = put_in(estado.expendedor, nuevo_expendedor)
+        {:noreply, nuevo_estado}
 
       {:error, expendedor} ->
         log_event(expendedor, "No puede cobrar #{monto} pesos en tarjeta ##{tarjeta.id}. Saldo insuficiente")
-        {:noreply, expendedor}
+        {:noreply, estado}
     end
   end
 
   @impl true
-  def handle_cast({:registrar, servidor}, expendedor) do
-    expendedor = put_in(expendedor.servidores, [servidor | expendedor.servidores])
-    log_event(expendedor, "Registrado servidor de sincronización #{inspect(servidor)}")
-    {:noreply, expendedor}
+  def handle_cast({:registrar, servidor}, estado) do
+    nuevo_estado = put_in(estado.expendedor.servidores, [servidor | estado.expendedor.servidores])
+    log_event(estado.expendedor, "Registrado servidor de sincronización #{inspect(servidor)}")
+    {:noreply, nuevo_estado}
   end
 
   @impl true
-  def handle_cast({:iniciar_sincronizacion}, expendedor) do
-    chequear_estado_de_servidores(expendedor)
-    for servidor <- expendedor.servidores do
-      Servidor.sincronizar(servidor, self(), expendedor.transacciones)
+  def handle_cast({:iniciar_sincronizacion}, estado) do
+    chequear_estado_de_servidores(estado.expendedor)
+    for servidor <- estado.expendedor.servidores do
+      Servidor.sincronizar(servidor, self(), estado.expendedor.transacciones)
     end
-    {:noreply, expendedor}
+    {:noreply, estado}
   end
 
   @impl true
-  def handle_cast({:sincronizacion_finalizada, transacciones}, expendedor) do
-    log_event(expendedor, "#{length(transacciones)} Transaccion(es) sincronizada(s) correctamente.")
-    {:noreply, put_in(expendedor.transacciones, [])}
+  def handle_cast({:sincronizacion_finalizada, transacciones}, estado) do
+    log_event(estado.expendedor, "#{length(transacciones)} Transaccion(es) sincronizada(s) correctamente.")
+    nuevo_estado = put_in(estado.expendedor.transacciones, [])
+    {:noreply, nuevo_estado}
   end
 
   @impl true
-  def handle_call({:status}, _from, expendedor) do
-    message = "Status: #{length(expendedor.servidores)} servidor(es), #{length(expendedor.transacciones)} transaccion(es) pendiente(s)"
-    log_event(expendedor, message)
-    {:reply, message, expendedor}
+  def handle_cast({:crash}, _estado) do
+    1/0
+  end
+
+  @impl true
+  def handle_call({:status}, _from, estado) do
+    message = "Status: #{length(estado.expendedor.servidores)} servidor(es), #{length(estado.expendedor.transacciones)} transaccion(es) pendiente(s)"
+    log_event(estado.expendedor, message)
+    {:reply, message, estado}
+  end
+
+  @impl true
+  def terminate(_reason, estado) do
+    log_event(estado.expendedor, "Finalizando proceso!")
+    Cache.actualizar_expendedor(estado.expendedor, estado.cache_pid)
   end
 
   def cobrar_pasaje(expendedor, tarjeta, monto) do

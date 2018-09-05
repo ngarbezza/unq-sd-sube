@@ -35,7 +35,8 @@ ocurre de manera asincrónica.
 El expendedor puede trabajar offline (esto es lo que sucede con muchos dispositivos SUBE), es decir sin estar conectado
 a un servidor central. Entonces, el expendedor guarda las transacciones para eventualmente sincronizarse con algún
 servidor que esté disponible. Hicimos que un expendedor pueda conocer varios servidores de sincronización, y que intente
-enviar sus transacciones a todos, para tener redundancia.
+enviar sus transacciones a todos, para tener redundancia. Las transacciones se generan con un UUID, de esta manera
+podremos identificarlas para luego persistirlas. 
 
 Un problema que teníamos en este punto era, qué pasa si el proceso del expendedor se detiene por un error inesperado,
 entonces se perderían las transacciones que tiene sin enviar hasta ese momento. Lo mismo ocurriría con el usuario y su
@@ -70,11 +71,26 @@ Como mantener el estado del expendedor, ya que tiene un nombre asociado, y mas i
 para enviar al servidor.
 
 Es por esto que utilizamos un Supervisor con un proceso caché del estado, y el proceso propiamente dicho del expendedor.
-Ambos estan implementados usando la interfaz GenServer, entonces pueden reiniciarse tranquilamente
+Ambos estan implementados usando la interfaz GenServer, entonces pueden reiniciarse tranquilamente.
 
-https://hexdocs.pm/elixir/GenServer.html
-https://elixir-lang.org/getting-started/mix-otp/genserver.html
-https://medium.com/blackode/how-to-retrieve-genserver-state-after-termination-the-practical-guide-1bafcff780bb
+Implementamos una función de ejemplo `crash()` que simula una excepción inesperada. Cuando esto ocurre, el proceso llama
+a un _callback_ llamado `terminate` que escribe el último estado en el caché, entonces este proceso puede terminar
+tranquilo. Mientras tanto, el Supervisor se va a encargar de restartear el proceso, apuntando al proceso de caché que
+sigue funcionando, y con el estado actualizado. Ejemplo del output de nuestro programa:
+
+```
+EXPENDEDOR              159 interno 8           Finalizando proceso!
+### cache write, expendedor %Expendedor{nombre: "159 interno 8", servidores: [#PID<0.188.0>], transacciones: []}
+### cache read, expendedor %Expendedor{nombre: "159 interno 8", servidores: [#PID<0.188.0>], transacciones: []}
+** (exit) exited in: GenServer.call(#PID<0.187.0>, {:status}, 5000)
+    ** (EXIT) an exception was raised:
+        ** (ArithmeticError) bad argument in arithmetic expression
+```
+
+Aquí se puede observar que el mismo proceso se "dio cuenta" de que estaba siendo finalizado, entonces guardó lo último
+que tenía en la caché, ocurrió el reinicio, volvió a tomar lo que tenía de la caché y continuó con el mismo estado que
+tenía antes. A través del observer de procesos pudimos ver cómo se generaba un nuevo PID y verificar que efectivamente
+ese nuevo PID tenía en su poder el estado anterior de la app.
 
 ### Aprendizajes
 
@@ -99,14 +115,29 @@ las validaciones sobre el código.
 * **Integración continua con Gitlab**: Utilizamos el servicio de integración continua que provee GitLab, configurarlo es
 muy sencillo, ya que basta con definir el archivo `.gitlab.ci.yml` con los pasos del build. En nuestro caso, es bastante
 simple el script ya que consta de instalar las dependencias, y luego correr los tests.
-* **Eliminar la duplicacion**, DRY: por ejemplo el `EventLogger`
-* **Encapsulamiento**: creacion de structs a traves de un solo punto, funcion del modulo, funciones cliente y servidor
-de cada módulo
-
-Ideas:
-
-* Conectar a Mongo usando replica sets, https://hexdocs.pm/mongodb/readme.html
+* **Eliminar la duplicacion**: En todo momento intentamos mantener las buenas prácticas de no repetir código y que el
+código sea lo más expresivo posible. Un ejemplo de esto es el módulo `EventLogger`. Este módulo emergió una vez que
+teníamos varios procesos que escribían información a modo de logs, que nos eran útiles para entender el funcionamiento
+de la app. Lo que hicimos fue darle un poco de formato, y separar la interface (función `log_event`) de la implementación
+(bien simple, con `IO.puts`) pero podría tener una mejor implementación en el futuro, y sólo hay que cambiar ese módulo.
+Incluso se lo puede integrar con el trabajo `loggly` que ya realizamos para tener loggeo de eventos con un orden total.
+* **Encapsulamiento**: Creacion de structs a través de un solo punto, usar el módulo como centralización de todo lo
+que corresponde al concepto que estamos modelando: como construir una instancia, cómo iniciar su procesamiento, cuál es
+su API de cliente y servidor. Transparencia entre un proceso base y un proceso supervisor. Para el usuario da lo mismo.
+Cuando introdujimos procesos supervisados con caché para recuperarse de terminaciones de procesos, solo cambiamos la
+implementación de `iniciar()` para que cree el arbol de procesos (y retorne, para nuestra comodidad, el proceso
+supervisor y el supervisado en una tupla) en lugar de un solo proceso. 
+* **Observer de procesos**: Con solo llamar a `:observer.start()` podíamos ver los procesos actuales y poder
+manipularlos. Esto resultó muy útil para hacer pruebas como la siguiente: matar el proceso de un Expendedor y ver como
+"spawnea" solo y recupera los datos de su caché.
 
 ### Referencias
 
 1. [Ex Matchers](https://github.com/10Pines/ex_matchers): Para escribir mejores aserciones con Elixir
+2. [GenServer](https://hexdocs.pm/elixir/GenServer.html): Para entender la interfaz de GenServer y cómo implementar la
+mensajería sincrónica/asincrónica
+3. [Tutorial de GenServers](https://elixir-lang.org/getting-started/mix-otp/genserver.html): tutorial oficial que
+muestra un ejemplo de implementación de GenServer.
+4. [Supervisión de procesos con caché](https://medium.com/blackode/how-to-retrieve-genserver-state-after-termination-the-practical-guide-1bafcff780bb):
+De aquí tomamos la idea de hacer que algunos procesos guarden su estado en otro, para poder recuperarse si llegan a
+fallar.
