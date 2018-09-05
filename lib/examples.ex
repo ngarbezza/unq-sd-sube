@@ -4,7 +4,7 @@ defmodule Examples do
   import Tarjeta
 
   # caso feliz, sin servidores
-  # [e159, pepa, pepe] = Examples.four()
+  # [e159, pepa, pepe] = Examples.one()
   def one do
     {:ok, _, e159} = Expendedor.iniciar("159 interno 8")
 
@@ -26,7 +26,7 @@ defmodule Examples do
   end
 
   # usuario sin saldo para viajar
-  # [e159, pepa] = Examples.four()
+  # [e159, pepa] = Examples.two()
   def two do
     {:ok, _, e159} = Expendedor.iniciar("159 interno 8")
     {:ok, pepa} = Usuario.iniciar("Pepa", nueva_tarjeta(1))
@@ -42,7 +42,7 @@ defmodule Examples do
   end
 
   # caso feliz, con servidores
-  # [e159, serv, pepe] = Examples.four()
+  # [e159, serv, pepe] = Examples.three()
   def three do
     {:ok, _, e159} = Expendedor.iniciar("159 interno 8")
     {:ok, serv} = Servidor.iniciar("Uno")

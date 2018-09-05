@@ -125,7 +125,7 @@ defmodule Expendedor do
   end
 
   defp transaccion_exitosa(expendedor, tarjeta, monto) do
-    nueva_transaccion = %Transaccion{tarjeta_id: tarjeta.id, monto: monto}
+    nueva_transaccion = Transaccion.nueva_transaccion(tarjeta.id, monto)
     transacciones = [nueva_transaccion | expendedor.transacciones]
     put_in(expendedor.transacciones, transacciones)
   end

@@ -27,10 +27,24 @@ defmodule Servidor do
 
   @impl true
   def handle_cast({:sincronizar, expendedor, transacciones}, servidor) do
-    servidor = put_in(servidor.transacciones, servidor.transacciones ++ transacciones)
-    Expendedor.sincronizacion_finalizada(expendedor, transacciones)
-    log_event(servidor, "#{length(transacciones)} nuevas transacciones")
-    {:noreply, servidor }
+    case persistir_transacciones(transacciones) do
+      {:atomic, :ok} ->
+        servidor = put_in(servidor.transacciones, servidor.transacciones ++ transacciones)
+        Expendedor.sincronizacion_finalizada(expendedor, transacciones)
+        log_event(servidor, "#{length(transacciones)} nuevas transacciones")
+        {:noreply, servidor}
+      error ->
+        log_event(servidor, "Falló la persistencia de transacciones: #{inspect(error)}")
+        {:noreply, servidor}
+    end
+  end
+
+  defp persistir_transacciones(transacciones) do
+    :mnesia.transaction(fn ->
+      Enum.each transacciones, fn(transaccion) ->
+        Transaccion.write_to_db(transaccion)
+      end
+    end)
   end
 
   defp log_event(servidor, event_string) do

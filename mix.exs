@@ -23,7 +23,8 @@ defmodule Sube.MixProject do
     [
       {:credo, "~> 0.8.8", only: :dev, runtime: false},
       {:uuid, "~> 1.1"},
-      {:ex_matchers, "~> 0.1.3", only: :test}
+      {:ex_matchers, "~> 0.1.3", only: :test},
+      {:amnesia, "~> 0.2.0"}
     ]
   end
 end

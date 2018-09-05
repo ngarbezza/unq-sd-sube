@@ -92,6 +92,18 @@ que tenía en la caché, ocurrió el reinicio, volvió a tomar lo que tenía de 
 tenía antes. A través del observer de procesos pudimos ver cómo se generaba un nuevo PID y verificar que efectivamente
 ese nuevo PID tenía en su poder el estado anterior de la app.
 
+### Persistencia con Mnesia
+
+Para poder persistir las transacciones que se realizan una vez que se integran a algún servidor, utilizamos la librería
+mnesia de Erlang, a traves del wrapper Amnesia que provee Elixir. Creamos una tabla, la cual se puede generar con el
+siguiente comando:
+
+`mix amnesia.create -d Database --disk`
+
+y consultar dentro de un intérprete:
+
+`:mnesia.dirty_all_keys(:"Elixir.Database.Transaccion")`
+
 ### Aprendizajes
 
 Estas son las cosas mas importantes aprendidas relacionadas a Elixir y la programación distribuida en general
@@ -141,3 +153,4 @@ muestra un ejemplo de implementación de GenServer.
 4. [Supervisión de procesos con caché](https://medium.com/blackode/how-to-retrieve-genserver-state-after-termination-the-practical-guide-1bafcff780bb):
 De aquí tomamos la idea de hacer que algunos procesos guarden su estado en otro, para poder recuperarse si llegan a
 fallar.
+5. [Amnesia](https://github.com/meh/amnesia): wrapper de mnesia para Elixir.

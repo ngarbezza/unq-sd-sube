@@ -24,3 +24,5 @@ sube-*.tar
 
 /.idea/
 *.iml
+
+/Mnesia.*
